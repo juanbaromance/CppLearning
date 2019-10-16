@@ -19,9 +19,12 @@
 #include <memory>
 #include <cassert>
 #include <random>
-class draw {};
-class x2 {};
+#include <typeinfo>
+#include <iomanip>
 
+// boiler plate
+class draw {};
+class doubler {};
 using PolyMorphicObject = polymorphic::object<void(draw, std::ostream&)const>;
 using PolyMorphicRef    = polymorphic::ref<void(draw, std::ostream&)const>;
 
@@ -34,27 +37,35 @@ void call_draw( PolyMorphicRef d )
 }
 
 
+/// read only object
 template <typename T>
 void poly_extend(draw, const T& t, std::ostream& os)
 {
     os << __PRETTY_FUNCTION__ << " " << t << " (auditor)\n";
 }
 
+/// read/write
+/// @todo how to provide the p pointer from the client domain
 template <typename T>
-void poly_extend(x2, T& t, std::unique_ptr<int>)
+void poly_extend(doubler, T& t, std::unique_ptr<int> p)
 {
-    std::cout << __PRETTY_FUNCTION__ << " " << t << " (doubler)\n";
+    std::ostream & os = std::cout;
+
+    os << __PRETTY_FUNCTION__ << " " << t;
+    os << " " << p.get();
     t = t + t;
+    os << " revalued as " << t;
+    os << std::endl;
+
 }
 
 int main()
 {
 
 	std::vector<polymorphic::object<
-		void(x2,std::unique_ptr<int>),
+        void(doubler,std::unique_ptr<int>),
 		void(draw, std::ostream & os) const
 		>> objects;
-
 
     std::random_device rd;
     std::mt19937 gen(rd());
@@ -72,18 +83,33 @@ int main()
 			objects.emplace_back(double(i) + double(i) / 10.0);
 			break;
 		case 2:
-			objects.emplace_back(std::to_string(i) + " string");
+            objects.emplace_back( std::to_string(i) );
 			break;
 		}
 	}
 
-	auto o = objects.front();
-    o.call<x2>(nullptr);
+    auto o = objects.front();
+    o.call<doubler>(nullptr);
 
     PolyMorphicObject co(10);
     auto co1 = co;
+
     for ( const auto& o : objects)
         call_draw( o );
+
+    std::cout << std::endl << std::endl;
+
+    // indirectional draw access
+    for ( auto& o : objects)
+        o.call<draw>( std::cout );
+
+    std::cout << std::endl << std::endl;
+    std::unique_ptr<int> p;
+    *p.get() = 1;
+
+    for (auto& o : objects)
+        o.call<doubler>(nullptr);
+
     return 0;
 
 //	for (auto& o : objects) o.call<x2>(nullptr);
