@@ -52,7 +52,7 @@ void poly_extend(doubler, T& t, std::unique_ptr<int> p)
     std::ostream & os = std::cout;
 
     os << __PRETTY_FUNCTION__ << " " << t;
-    os << " " << p.get();
+    os << " " << ( p.get() ? std::to_string( *p.get() ) : "released" );
     t = t + t;
     os << " revalued as " << t;
     os << std::endl;
@@ -104,11 +104,11 @@ int main()
         o.call<draw>( std::cout );
 
     std::cout << std::endl << std::endl;
-    std::unique_ptr<int> p;
-    *p.get() = 1;
+    std::unique_ptr<int> p( new int );
+    *p.get() = 100;
 
     for (auto& o : objects)
-        o.call<doubler>(nullptr);
+        o.call<doubler>( std::forward<decltype(p)>(p) );
 
     return 0;
 
