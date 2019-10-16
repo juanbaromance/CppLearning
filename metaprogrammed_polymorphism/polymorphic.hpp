@@ -133,14 +133,14 @@ namespace polymorphic {
 			auto get_ptr() const { return t_.get_ptr(); }
 			auto get_ptr() { return t_.get_ptr(); }
 
-			template <typename Method, typename... Parameters>
+            template <typename Method, typename... Parameters>
 			decltype(auto) call(Parameters&&... parameters) const {
 				return call_vtable(vptr_, permutation_.data(), Method{}, t_.get_ptr(),
 					std::forward<Parameters>(parameters)...);
 			}
 
 			template <typename Method, typename... Parameters>
-			decltype(auto) call(Parameters&&... parameters) {
+            decltype(auto) call(Parameters&&... parameters ) {
 				return call_vtable(vptr_, permutation_.data(), Method{}, t_.get_ptr(),
 					std::forward<Parameters>(parameters)...);
 			}

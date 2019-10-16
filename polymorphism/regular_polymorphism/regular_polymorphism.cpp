@@ -9,6 +9,7 @@ int main() {
 	shapes.emplace_back();
 	shapes.emplace_back(circle{});
 	shapes.emplace_back(square{});
+	
 	composite c;
 	c.shapes_.emplace_back(square{});
 	c.shapes_.emplace_back(circle{});
