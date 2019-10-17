@@ -4,7 +4,7 @@
 template <class T>
 void auditor(std::string backtrace, T arg)
 {
-    (std::cout << backtrace << "." << arg << std::endl).flush();
+    (std::cout << backtrace << " : " << arg << std::endl).flush();
 }
 
 int main()
@@ -24,9 +24,13 @@ int main()
             return tmp;
         };
 
-        ( [=,&k]() { auditor( __PRETTY_FUNCTION__ , modulate(300) ); } )();
+        ( [=]() { auditor( __PRETTY_FUNCTION__ , modulate(300) ); } )();
     }
     
+    {
+        int x = 0, j = 1;
+        auditor( __PRETTY_FUNCTION__ + std::to_string(x),[x]() mutable { return ++x; } () );
+    }
 
     return 0;
 }

@@ -21,11 +21,14 @@ public:
     {
 	UniqueLock lock{mut_};
 	threads_.emplace_back([this]() mutable {
-	    while (true) {
+	    while (true)
+	    {
 		auto f = q_.pop();
-		if (f) {
+		if (f)
+		{
 		    (*f)();
-		} else {
+		} else
+		{
 		    if (q_.done()) return;
 		}
 	    }
