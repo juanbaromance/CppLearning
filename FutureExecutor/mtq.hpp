@@ -246,6 +246,12 @@ struct Testing
         effect =
             std::async( std::launch::async,[&](std::string name = "effect") {
                 sync( name, p_effect );
+
+                // Below would be a typical race condition on raw multithreaded progamming
+                // case of use : the external flow (main) triggers the condition before current
+                // thread arrives to wait on it
+
+                std::this_thread::sleep_for(MilliSeconds( 1000 ) );
                 return dice( name );
             });
 
