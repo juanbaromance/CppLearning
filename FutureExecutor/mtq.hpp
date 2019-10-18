@@ -6,6 +6,8 @@
 #include <optional>
 #include <iostream>
 #include <string>
+#include <unistd.h>
+#include <iomanip>
 
 template <typename T>
 struct crtp {
@@ -112,6 +114,8 @@ namespace ContainerDisplay
 
 #include <future>
 #include <random>
+#include <chrono>
+#include <sstream>
 
 namespace MTQTesting
 {
@@ -124,6 +128,8 @@ struct Testing
     using QIface  = std::unique_ptr<iMTQ<T, QImpl>>;
     using QSIface = std::shared_ptr<iMTQ<T, QImpl>>;
     mutable Mutex mtx;
+    std::ostream & os = std::cout;
+    std::random_device rd;
 
     void testQImpl( QIface &&q )
     {
@@ -135,65 +141,133 @@ struct Testing
         while ((k = q->pop(10)).has_value()) tmp.emplace_back(k.value());
 
         using namespace ContainerDisplay;
-        std::cout << __FUNCTION__ << " : " << tmp << std::endl;
+        os << __FUNCTION__ << " : " << tmp << std::endl;
     }
 
     void Plain(){ testQImpl( QIface( new QImpl(5)) ); }
 
     void Async()
     {
-        QSIface q( new QImpl(5));
+        using namespace ContainerDisplay;
+        ( os << std::endl << __FUNCTION__ << " # testing" << std::endl );
 
+        QSIface q( new QImpl(5));
+        using Timing = std::chrono::high_resolution_clock;
         using QPage = std::vector<T>;
         std::future<QPage> pull,push;
 
-        push = std::async( std::launch::async, [&]()
+        push =
+            std::async ( std::launch::async, [&]() {
+                std::mt19937 gen(rd());
+                std::uniform_int_distribution<> dis(5,40);
+                QPage page;
+
+                std::chrono::time_point<Timing> start = Timing::now();
+                for ( auto k : { 0, 1, 2, 3, 4 } )
+                {
+                    std::this_thread::sleep_for(MilliSeconds( dis(gen) ) );
+                    page.emplace_back(k);
+                    q->push(k);
+                }
+
+                auto elapsed = ( std::chrono::duration<double, std::milli>{ Timing::now() - start } ).count();
+                UniqueLock lock{mtx};
+                ( os << __FUNCTION__ << " : " << page << " : page Updated " << elapsed << "(msec)" << std::endl ).flush();
+                return page;
+            });
+
+
+        pull =
+            std::async( std::launch::async, [&]() {
+                push.wait_for(MilliSeconds(100));
+                QPage floating_page;
+                std::optional<T> k;
+                while ( ( k = q->pop(10) ).has_value() )
+                    floating_page.emplace_back(k.value());
+                return floating_page;
+            });
+
         {
-            std::random_device rd;
-            std::mt19937 gen(rd());
-            std::uniform_int_distribution<> dis(5,40);
-            QPage page;
 
-            for ( auto k : { 0, 1, 2, 3, 4 } )
-            {
-                std::this_thread::sleep_for(MilliSeconds( dis(gen) ) );
-                page.emplace_back(k);
-                q->push(k);
-            }
-
-            using namespace ContainerDisplay;
-            UniqueLock lock{mtx};
-            ( std::cout << __FUNCTION__ << " : " << page << " : page Updated" << std::endl ).flush();
-            return page;
-        });
-
-
-        pull = std::async( std::launch::async, [&]()
-        {
-            push.wait_for(MilliSeconds(100));
-            QPage floating_page;
-            std::optional<T> k;
-            while ( ( k = q->pop(10) ).has_value() )
-                floating_page.emplace_back(k.value());
-            return floating_page;
-        });
-
-        {
-            std::future_status status = pull.wait_for(MilliSeconds(200));
+            std::chrono::time_point<Timing> start = Timing::now();
+            pull.wait_for(MilliSeconds(200));
+            auto elapsed = ( std::chrono::duration<double, std::milli>{ Timing::now() - start } ).count();
             push.wait();
 
-            using namespace ContainerDisplay;
             UniqueLock lock{mtx};
-            ( std::cout << __FUNCTION__ << " # "
-                        << " promised( "  << push.get() << ")"
-                        << " vs "
-                        << " effective( " << pull.get() << ")"
-                        << std::endl ).flush();
+            ( os << __FUNCTION__ << " #"
+                       << " promised( "  << push.get() << ")"
+                       << " vs "
+                       << " effective( " << pull.get() << ")"
+                       << elapsed << "(msec)"
+                       << std::endl ).flush();
         }
-
-
     }
 
+    void MasteredSpin()
+    {
+        using namespace ContainerDisplay;
+        {
+            UniqueLock lock{mtx};
+            ( os << std::endl << __FUNCTION__ << " # testing" << std::endl ).flush();
+        }
+
+        std::future<bool> cause, effect;
+        std::promise<void> ready, p_cause, p_effect;
+        std::shared_future<void> start( ready.get_future() );
+
+
+        auto dice = [&](std::string name)
+        {
+            start.wait();
+            std::mt19937 gen(rd());
+            std::uniform_int_distribution<> dis(0,1);
+            auto o = dis( gen ) ? true : false;
+            {
+                UniqueLock lock{mtx};
+                ( os << std::setw(20) << name.c_str() << "(" << o << ")" << std::endl).flush();
+            }
+            return o;
+        };
+
+        auto sync = [&](std::string name, std::promise<void>& promise )
+        {
+            UniqueLock lock{mtx};
+            ( os << std::setw(20) << name.c_str() << " waiting Spin retrigger" << std::endl).flush();
+            promise.set_value();
+        };
+
+        cause =
+            std::async( std::launch::async,[&]( std::string name = "cause" ) {
+                sync( name, p_cause );
+                return dice( name );
+            });
+
+        effect =
+            std::async( std::launch::async,[&](std::string name = "effect") {
+                sync( name, p_effect );
+                return dice( name );
+            });
+
+        for( auto const & f : { p_cause.get_future(), p_effect.get_future() } )
+            f.wait();
+
+        {
+            UniqueLock lock{mtx};
+            ( os << __FUNCTION__ << "CE.setup: ready" << std::endl ).flush();
+            ready.set_value();
+        }
+
+        {
+            std::ostringstream oss;
+            for( auto const v : { cause.get(), effect.get() } )
+                oss << v;
+            {
+                UniqueLock lock{mtx};
+                ( os << __FUNCTION__ << "(" << oss.str().c_str() << ")" << std::endl ).flush();
+            }
+        }
+    }
 
 };
 

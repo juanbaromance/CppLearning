@@ -5,6 +5,7 @@
 int main()
 {
     MTQTesting::Testing<int>().Async();
+    MTQTesting::Testing<int>().MasteredSpin();
     return 0;
 
     auto pool = std::make_shared<thread_pool>();
