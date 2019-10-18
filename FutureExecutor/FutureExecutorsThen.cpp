@@ -4,7 +4,7 @@
 
 int main()
 {
-    MTQTesting::Testing<int>().ProbeMe();
+    MTQTesting::Testing<int>().Async();
     return 0;
 
     auto pool = std::make_shared<thread_pool>();

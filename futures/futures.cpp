@@ -139,15 +139,46 @@ auto async(launch policy, F f, Args... args) -> future<decltype(f(args...))> {
   return fut;
 }
 
-#include <iostream>
+// Basic idea of variadic arguments where pattern matching is fully deployed
+template<typename T> bool pair_comparer(T) { return false;}
+template<typename T> bool pair_comparer(T a, T b) {  return a == b; }
+template<typename T, typename... Args>
+bool pair_comparer(T a, T b, Args... args) {  return a == b && pair_comparer(args...); }
 
-int main() {
-  auto fut = async(launch::async, []() { return 5; });
-  std::cout << fut.get() << "\n";
-  auto fut2 = async(launch::deferred, []() { return 5; });
-  std::cout << fut2.get() << "\n";
-  int v = 0;
-  auto fut3 = async(launch::async, [&]()mutable{v = 4;});
-  fut3.get();
-  std::cout << v << "\n";
+#include <iostream>
+namespace containerdisplay
+{
+  template<typename T, template<class,class...> class C, class... Args>
+  std::ostream& operator <<(std::ostream& os, const C<T,Args...>& objs)
+  {
+    for ( auto const & obj : objs )
+      os << obj << ' ';
+    return os;
+  }
+}
+
+#include <vector>
+int main()
+{
+    std::vector<int> tmp = { 1, 2, 3 };
+    {
+        using namespace containerdisplay;
+        std::cout << __PRETTY_FUNCTION__ << "." << pair_comparer<int>(4, 4, 1, 1) << tmp ;
+    }
+
+    // below doesn't compile ;-)
+    // std::cout << tmp;
+
+    // return 0;
+
+    auto fut = async(launch::async, []() { return 5; });
+    std::cout << fut.get() << "\n";
+    auto fut2 = async(launch::deferred, []() { return 5; });
+    std::cout << fut2.get() << "\n";
+
+    int v = 0;
+    auto fut3 = async( launch::async, [&v]()mutable{ v = 4; });
+    fut3.get();
+    std::cout << v << "\n";
+
 }

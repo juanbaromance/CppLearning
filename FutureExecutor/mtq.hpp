@@ -97,31 +97,105 @@ private:
 };
 
 
+namespace ContainerDisplay
+{
+  template<typename T, template<class,class...> class C, class... Args>
+  std::ostream& operator <<(std::ostream& os, const C<T,Args...>& objs)
+  {
+    for ( auto const & obj : objs )
+      os << obj << ' ';
+    return os;
+  }
+
+};
+
+
+#include <future>
+#include <random>
+
 namespace MTQTesting
 {
-
-template <class... T>
-void auditor(std::string backtrace, T... arg)
-{
-    (std::cout << backtrace << std::endl).flush();
-}
 
 template <typename T = int>
 struct Testing
 {
 
     using QImpl = MTQ<T>;
-    using QIface = std::unique_ptr<iMTQ<T, QImpl>>;
+    using QIface  = std::unique_ptr<iMTQ<T, QImpl>>;
+    using QSIface = std::shared_ptr<iMTQ<T, QImpl>>;
+    mutable Mutex mtx;
+
     void testQImpl( QIface &&q )
     {
         for ( auto k : { 0, 1, 2 } )
             q->push(k);
+
         std::optional<T> k;
-        while ((k = q->pop(10)).has_value())
-            auditor( __FUNCTION__ + std::string(":") + std::to_string(k.value()));
+        std::vector<T> tmp;
+        while ((k = q->pop(10)).has_value()) tmp.emplace_back(k.value());
+
+        using namespace ContainerDisplay;
+        std::cout << __FUNCTION__ << " : " << tmp << std::endl;
     }
 
-    void ProbeMe(){ testQImpl( QIface( new QImpl(5)) ); }
+    void Plain(){ testQImpl( QIface( new QImpl(5)) ); }
+
+    void Async()
+    {
+        QSIface q( new QImpl(5));
+
+        using QPage = std::vector<T>;
+        std::future<QPage> pull,push;
+
+        push = std::async( std::launch::async, [&]()
+        {
+            std::random_device rd;
+            std::mt19937 gen(rd());
+            std::uniform_int_distribution<> dis(5,40);
+            QPage page;
+
+            for ( auto k : { 0, 1, 2, 3, 4 } )
+            {
+                std::this_thread::sleep_for(MilliSeconds( dis(gen) ) );
+                page.emplace_back(k);
+                q->push(k);
+            }
+
+            using namespace ContainerDisplay;
+            UniqueLock lock{mtx};
+            ( std::cout << __FUNCTION__ << " : " << page << " : page Updated" << std::endl ).flush();
+            return page;
+        });
+
+
+        pull = std::async( std::launch::async, [&]()
+        {
+            push.wait_for(MilliSeconds(100));
+            QPage floating_page;
+            std::optional<T> k;
+            while ( ( k = q->pop(10) ).has_value() )
+                floating_page.emplace_back(k.value());
+            return floating_page;
+        });
+
+        {
+            std::future_status status = pull.wait_for(MilliSeconds(200));
+            push.wait();
+
+            using namespace ContainerDisplay;
+            UniqueLock lock{mtx};
+            ( std::cout << __FUNCTION__ << " # "
+                        << " promised( "  << push.get() << ")"
+                        << " vs "
+                        << " effective( " << pull.get() << ")"
+                        << std::endl ).flush();
+        }
+
+
+    }
+
+
 };
+
 
 } // namespace MTQTesting
