@@ -3,6 +3,8 @@
 #include <vector>
 #include <thread>
 #include <chrono>
+#include <random>
+#include <string_view>
 #include <boost/regex.hpp>
 #include <boost/format.hpp>
 #include <valarray>
@@ -36,7 +38,8 @@ static string snapshot()
 template <typename ...T>
 void auditor( std::string backtrace, T... args )
 {
-    cout << boost::format("%s: %20s\n") % snapshot() % backtrace;
+    std::cout << boost::format("%s: %20s") % snapshot() % backtrace;
+    std::cout << std::endl;
 }
 
 
@@ -78,12 +81,18 @@ private:
 
         private:
             string name;
-        };      
+        };
 
+        class TreeHouse : public House
+        {
+        public:
+            TreeHouse( std::string name ) : House( "Tree." + name ){ }
+            ~TreeHouse(){ auditor( __FUNCTION__ ); }
+        };
 
         {
             cout << std::endl;
-            auditor("UniquePointer and Move rationale:" );
+            auditor("UniquePointer and Move rationale ::" );
 
             using HousePtr = std::unique_ptr<House>;
             class HouseKeeper
@@ -104,25 +113,81 @@ private:
             using HouseKeeperPtr = std::unique_ptr<HouseKeeper>;
             HouseKeeperPtr keeper( new HouseKeeper() );
             {
-                HousePtr p( new House( "DieFirst"));
-                keeper->slide( std::make_unique<House>("DieJoined") );
+                auto UniqueHouseFactory = []( std::string name ){ return std::make_unique<House>(name);};
+                HousePtr p( UniqueHouseFactory( "DieFirst") );
+                keeper->slide( UniqueHouseFactory("DieJoined") );
             }
         }
 
 
         {
             cout << std::endl;
-            auditor("SharedPointer rationale:" );
+            auditor("SharedPointer rationale ::" );
             using HousePtr = std::shared_ptr<House>;
 
-            HousePtr h( new House("Shared House") );
-            thread( []( HousePtr h ){ auditor( h->named() ); }, h ).detach();
-            thread( []( HousePtr h ){ sleep(1000); auditor( h->named() ); }, h  ).detach();
+            HousePtr h( std::make_shared<House>("shared#") );
+            thread( [h](){ auditor( h->named() ); }).detach();
+            thread( [h](){ sleep(100); auditor( h->named() ); }).detach();
         }
 
-        sleep(5000);
+        sleep(1000);
 
+        {
+            cout << std::endl;
+            auditor("WeakPointer rationale ::" );
 
+            std::random_device rd;
+            std::mt19937 gen(rd());
+            std::uniform_int_distribution<> dis(0,100);
+
+            std::weak_ptr<House> w;
+            {
+               auto TreeHouseFactory = []( std::string name ){ return std::make_shared<TreeHouse>(name);};
+               using TreeHousePtr = std::shared_ptr<TreeHouse>;
+               TreeHousePtr h = TreeHouseFactory("House#Shared");
+               w = h;
+               thread( [&]( TreeHousePtr h )
+                      {
+                          sleep(dis(gen));
+                          auditor( __PRETTY_FUNCTION__ + h->named() );
+                      }, h ).detach();
+            }
+
+            sleep(dis(gen));
+            if( auto o = w.lock() )
+                auditor( o->named() + "#Weaked" );
+            else
+                auditor( "Weak Base Reference grounded");
+
+            sleep(1000);
+        }
+
+        {
+            cout << std::endl;
+            auditor("Shared from Embedded rationale ::" );
+
+            using SharedHousePtr = std::shared_ptr<class SharedHouse>;
+            class SharedHouse : public House, public std::enable_shared_from_this<SharedHouse>
+            {
+            public:
+                SharedHouse( std::string name = "House") : House( name + "#Shared.Derivated" ){ }
+                ~SharedHouse(){}
+                SharedHousePtr getptr() { return shared_from_this(); }
+            };
+
+            SharedHousePtr root = std::make_shared<SharedHouse>();
+            const string & name = root->named();
+
+            thread( [=](){
+                sleep(100);
+                auditor( name + "#" + __FUNCTION__ + ".threaded : touched by " + std::to_string( root.use_count() ) );
+            }).detach();
+
+            auditor( name + " : touched by " + std::to_string( root.use_count() ) );
+            sleep(2000);
+            auditor( name + " : afterwhile touched by " + std::to_string( root.use_count() ) );
+
+        }
     }
 
     void VectorDangling()
@@ -288,7 +353,7 @@ int main()
     print_container( vector<float>( {1.2, 3, 4000 } ) );
     
     vector<size_t> v = { 1, 2, 3 };
-    for( const auto i : v )
+    for( const auto & i : v )
         size_t j = i;
 
     /* Variadic testing */
