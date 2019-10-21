@@ -63,8 +63,8 @@ public:
     };
 
     using SubscriptorRef = std::weak_ptr<Subscriptor>;
-
     using Pointer = std::shared_ptr<iTimer>;
+
     virtual void Start( const spec && spec ) = 0;
     virtual void Subscribe( std::string id, SubscriptorRef w ) = 0;
     virtual ~iTimer(){ auditor( __PRETTY_FUNCTION__  ); }
@@ -95,28 +95,24 @@ private:
         _start = boost::posix_time::microsec_clock::local_time();
         t.expires_from_now( std::chrono::seconds( _rt_deadline ));
         t.async_wait( boost::bind( & cTimer::callback, this ) );
+        if( trace_level > TraceLevel::Silent | ( _synchronous == false ) )
+        {
+            auditor( ( boost::format("%s : %s")
+                       % __PRETTY_FUNCTION__
+                       % ( _synchronous == false  ? "scheduled" : "done" ) ).str() );
+        }
 
         std::thread( [=](){
-            std::ostringstream oss;
-            oss << boost::format("%s : io_service") % __PRETTY_FUNCTION__ ;
-            auditor( oss.str() );
+            auditor( ( boost::format("%s : io_service") % __PRETTY_FUNCTION__ ).str() );
             t.get_io_service().run();
-        }
-        ).join();
+        }).join();
 
-        if( trace_level > TraceLevel::Silent )
-        {
-            std::ostringstream oss;
-            oss << boost::format("%s : done") % __PRETTY_FUNCTION__ ;
-            auditor( oss.str() );
-        }
+
     }
 
 private:
     std::map<std::string, SubscriptorRef > w_observers;
     void Subscribe( std::string id, SubscriptorRef w ) override { w_observers[ id ] = w; }
-
-
 
     void Start( bool synchronous ){ _synchronous = synchronous; }
     void Start( size_t deadline )
@@ -139,13 +135,13 @@ private:
         Time end = boost::posix_time::microsec_clock::local_time();
         auditor( ( boost::format("%s # %d(msec)")
                    % __PRETTY_FUNCTION__  % (end - _start).total_milliseconds() ).str() );
-        for( auto & [ k, w ] : w_observers )
+        for( const auto & [ k, w ] : w_observers )
         {
             if( w.lock() )
                 w.lock()->timedOut( k );
             else
             {
-                auditor( ( boost::format("%s # purgue %s obvserver") % __PRETTY_FUNCTION__ % k ).str() );
+                auditor( ( boost::format("%s # purgue observer \"%s\"") % __PRETTY_FUNCTION__ % k ).str() );
                 w_observers.erase(k);
             }
         }
@@ -185,7 +181,7 @@ int main()
     auto notifier( std::make_shared<cNotifier>( __PRETTY_FUNCTION__ , timer ) );
     notifier->Subscribe();
 
-    std::thread( [&](){ timer->Start({false, 5}); }).join();
+    std::thread( [&](){ timer->Start({true, 5}); }).join();
     return 0;
 
 }
