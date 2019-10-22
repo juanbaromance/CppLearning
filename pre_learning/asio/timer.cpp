@@ -47,8 +47,8 @@ static std::string snapshot()
 class iTimer {
 public:
 
-    using spec = std::tuple<bool,size_t>;
 
+    mutable Mutex mut_;
     template <typename ...T>
     void auditor( std::string backtrace, T... args )
     {
@@ -57,18 +57,21 @@ public:
         ( std::cout << std::endl ).flush();
     }
 
-    struct Subscriptor {
+    struct iSubscriptor {
         virtual void timedOut( std::string ) = 0;
-        virtual ~Subscriptor(){ }
+        virtual ~iSubscriptor(){ }
     };
 
-    using SubscriptorRef = std::weak_ptr<Subscriptor>;
+
     using Pointer = std::shared_ptr<iTimer>;
 
+    using spec = std::tuple<bool,size_t>;
     virtual void Start( const spec && spec ) = 0;
-    virtual void Subscribe( std::string id, SubscriptorRef w ) = 0;
+
+    using SubscriptorRef = std::weak_ptr<iSubscriptor>;
+    virtual void Subscribe( const std::string id, SubscriptorRef w ) = 0;
     virtual ~iTimer(){ auditor( __PRETTY_FUNCTION__  ); }
-    mutable Mutex mut_;
+
 
 };
 
@@ -81,8 +84,7 @@ public:
     TraceLevel trace_level = TraceLevel::Silent;
 
     cTimer( boost::asio::io_service &io, std::string name, size_t deadline ) :
-        _synchronous(true), _name(name), t(io, std::chrono::seconds(deadline)), _deadline( deadline )
-    {}
+        _synchronous(true), _name(name), t(io, std::chrono::seconds(deadline)), _deadline( deadline ){}
 
     ~cTimer() override { auditor( __PRETTY_FUNCTION__  ); }
 
@@ -111,8 +113,8 @@ private:
     }
 
 private:
+    void Subscribe( const std::string id, SubscriptorRef w ) override { w_observers[ id ] = w; }
     std::map<std::string, SubscriptorRef > w_observers;
-    void Subscribe( std::string id, SubscriptorRef w ) override { w_observers[ id ] = w; }
 
     void Start( bool synchronous ){ _synchronous = synchronous; }
     void Start( size_t deadline )
@@ -155,7 +157,7 @@ private:
 };
 
 
-class cNotifier : public iTimer::Subscriptor, public std::enable_shared_from_this<cNotifier>
+class cNotifier : public iTimer::iSubscriptor, public std::enable_shared_from_this<cNotifier>
 {
 public:
     cNotifier( std::string _name, std::shared_ptr<iTimer> timer ) : w( timer ), name( _name ){}
