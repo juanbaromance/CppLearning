@@ -86,7 +86,7 @@ public:
     cTimer( boost::asio::io_service &io, std::string name, size_t deadline ) :
         _synchronous(true), _name(name), t(io, std::chrono::seconds(deadline)), _deadline( deadline ){}
 
-    ~cTimer() override { auditor( __PRETTY_FUNCTION__  ); }
+    virtual ~cTimer() override { auditor( __PRETTY_FUNCTION__  ); }
 
 private:
     void Start( const cTimer::spec && spec ) override
@@ -97,7 +97,7 @@ private:
         _start = boost::posix_time::microsec_clock::local_time();
         t.expires_from_now( std::chrono::seconds( _rt_deadline ));
         t.async_wait( boost::bind( & cTimer::callback, this ) );
-        if( trace_level > TraceLevel::Silent | ( _synchronous == false ) )
+        if( ( trace_level > TraceLevel::Silent ) | ( _synchronous == false ) )
         {
             auditor( ( boost::format("%s : %s")
                        % __PRETTY_FUNCTION__
