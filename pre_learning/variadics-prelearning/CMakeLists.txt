@@ -1,3 +1,4 @@
+project(TemplatesVariadics LANGUAGES CXX)
 set(tail local)
 set(CMAKE_CXX_FLAGS "-ggdb -std=c++1z")
 
