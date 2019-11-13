@@ -45,7 +45,7 @@ struct Dec { Register reg; };
 struct Load
 {
   Register target;
-  int32_t value;
+  size_t value;
 };
 
 struct Print { Register reg; };
@@ -70,13 +70,13 @@ struct Jump
     NotEqual
   };
 
-  explicit Jump(int32_t offset_, Condition condition_ = Condition::None)
+  explicit Jump(int offset_, Condition condition_ = Condition::None)
     : offset(offset_)
     , condition(condition_)
   {
   }
 
-  int32_t offset;
+  int offset;
   Condition condition;
 };
 

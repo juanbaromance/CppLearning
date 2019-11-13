@@ -22,25 +22,14 @@
 #include "interpreter.hpp"
 #include "program.hpp"
 
-
 using namespace variant_talk;
 
-namespace
-{
-
-void run(const Program& program)
-{
-  Interpreter interpreter;
-  interpreter.run(program);
-}
-
-} // namespace
 
 int main()
 {
   using R = Register;
-
   Program myProgram{
+
     // i = 1;
     // while (i <= 10) {
     //   print(i);
@@ -58,6 +47,6 @@ int main()
                                       // done:
   };
 
-  run(myProgram);
+  Interpreter().run(myProgram);
 }
 

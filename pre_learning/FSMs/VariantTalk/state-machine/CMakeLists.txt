@@ -13,6 +13,9 @@ set(sources
     sfml_interop.hpp
 )
 
+set( PROJECT_SOURCE_DIR ../ )
+set( CMAKE_CXX_FLAGS "-O0 -g -std=c++1z")
+
 add_executable(state_machine ${sources})
 target_include_directories(state_machine
     PRIVATE
@@ -28,6 +31,8 @@ target_link_libraries(state_machine
     ${SFML_DEPENDENCIES}
     # For SFML >= 2.5
     sfml-graphics
+    sfml-system
+    sfml-window
 )
 set_target_properties(state_machine PROPERTIES
     VS_DEBUGGER_WORKING_DIRECTORY "${CMAKE_BINARY_DIR}"
