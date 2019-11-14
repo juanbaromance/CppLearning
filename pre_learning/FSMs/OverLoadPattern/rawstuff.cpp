@@ -9,6 +9,7 @@ struct DoorState
     struct DoorLocked {};
 
     using State = std::variant<DoorOpened, DoorClosed, DoorLocked>;
+    State m_state;
 
     void open()
     {
@@ -62,7 +63,7 @@ struct DoorState
 	State operator()(const DoorLocked&){ return DoorClosed(); }
     };
 
-    State m_state;
+
 };
 
 int test()

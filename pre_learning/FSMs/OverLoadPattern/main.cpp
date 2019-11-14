@@ -1,9 +1,11 @@
 #include <iostream>
 #include "match.hpp"
 #include <string>
+#include <memory>
 #include <cmath>
 #include <typeinfo>
 #include <boost/format.hpp>
+
 template <typename T>
 struct crtp {
     T& underly(){ return static_cast<T&>(*this); }
@@ -15,26 +17,30 @@ template <typename T>
 struct fsm_state : public crtp<fsm_state<T>>
 {
     fsm_state() : trace_level(0) {}
+
+    // Prototypes a scope-guard
     virtual bool onEntry(){ return true; }
     virtual void onExit( const string & backtrace = "" )
-    {
-        ( cout << boost::format("state( %20s ) : proc : %10s\n") % dump() % backtrace ).flush();
-    }
+    {  ( cout << boost::format("state( %20s ) : proc : %10s\n") % dump() % backtrace ).flush(); }
     virtual const string dump(){ return this->underly().dump(); }
     int trace_level;
 };
 
+constexpr static char magics[] = "12345678910";
 struct sClosed : fsm_state<sClosed> {
 public:
 
     sClosed( )
     {
+        // Todo : Model a global/specific Lock which disables constructor see EC++ item XY,
+        // Very likely throw something is the best approach
         if( onEntry() == true )
             ( cout << boost::format("state( %20s )\n") % dump() ).flush();
     }
     void onExit( const string & backtrace = "" ){ fsm_state::onExit( __FUNCTION__ + backtrace );  }
     const string dump(){ return "Closed"; }
 };
+
 struct sOpened : fsm_state<sOpened> {
 
     sOpened( fsm_state<sClosed> & s )
@@ -57,18 +63,14 @@ struct sOpened : fsm_state<sOpened> {
 struct sLocked : fsm_state<sLocked> {
     sLocked( const string & keyword, fsm_state<sClosed> & s ) : keyword_ ( keyword )
     {
-        // Prototypes entry-state guard
         if( onEntry() )
         {
             ( cout << boost::format("Locking Action: ")).flush();
             s.onExit();
             ( cout << boost::format("state( %20s )\n") % dump() ).flush();
         }
-        else
-            throw "forbidden entry invalid keyword";
     }
 
-    bool onEntry() { return ( keyword_ .length() < 10 ) ? false : true; }
     void onExit ( const string & backtrace = "" ){ fsm_state::onExit( __FUNCTION__ + backtrace ); }
     sLocked & auditor( const string & backtrace )
     {
@@ -82,7 +84,18 @@ struct sLocked : fsm_state<sLocked> {
 };
 
 using namespace variant_talk;
-struct door_logics
+
+template <typename T>
+struct iDoorLogics : public crtp<T>
+{
+public:
+    void Open ( ){ this->underly().eOpen(); }
+    void Close( ){ this->underly().eClose(); }
+    void Lock( const string & keyword ){ this->underly().eLock( keyword ); }
+    void UnLock( const string & keyword ){ this->underly().eUnLock( keyword ); }
+};
+
+struct cDoorLogics : iDoorLogics<cDoorLogics>
 {
 private:
     using State = variant <sOpened,sClosed,sLocked>;
@@ -91,7 +104,7 @@ private:
 
 public:
     template<typename R = sOpened, typename S = sClosed, typename T = sLocked>
-    door_logics & dump( string backtrace = "" )
+    cDoorLogics & dump( string backtrace = "" )
     {
         string report = match( state_ ,
               []( R &s ) -> string { return s.dump(); },
@@ -102,52 +115,72 @@ public:
         return *this;
     }
 
+    void testing()
+    {
+        auto tryClose  = [=](){ eClose(); };
+        auto tryOpen   = [=](){ eOpen(); };
+        auto tryUnLock = [=]( const string & key = magics ){ eUnLock(key); };
+        auto tryLock   = [=]( const string & key = magics ){ eLock(key); };
+
+        tryClose();
+        // Open state testing
+        dump("\n## Opening Test");
+        tryOpen();
+        tryLock("1233");
+        tryLock();
+        tryClose();
+        tryLock("22123");
+        tryLock();
+
+        // Locking state testing
+        dump("\n## Locking Test");
+        tryOpen();
+        tryClose();
+        tryUnLock("123");
+        tryUnLock();
+        tryOpen();
+    }
+
+
     // Intrusive Approach A : Events manage the state implementation
-public:
+private:
     using newState = std::optional<State>;
 
-    door_logics & eOpen( )
+    void eOpen( )
     {
         state_ = match( state_ ,
            []( sClosed & s ) -> State { return sOpened( s ); },
            []( sOpened & s ) -> State { return s; },
            []( sLocked & s ) -> State { return s.auditor("\"UNLOCK\" door before OPENING"); }
         );
-        return *this;
     }
-    door_logics & eClose()
+
+    void eClose()
     {
         state_ = match( state_ ,
+        // Todo : extra sintactic sugar is required to assembly below ala OR
            []( sClosed & s ) -> State { return s; },
            []( sLocked & s ) -> State { return s; },
            []( sOpened & s ) -> State { s.onExit(); return sClosed(); }
         );
-        return *this;
     }
-    door_logics & eLock( const string & keyword )
+
+    void eLock( const string & keyword )
     {
         using namespace variant_talk;
         state_ = match( state_ ,
-        []( sLocked & s ) -> State { return s; },
-        []( sOpened & s ) -> State { return s.auditor( "\"CLOSE\" door before \"LOCKING\""); },
-        [=]( sClosed & s ) -> State
-        {
-            // Todo below is the typical transition guard
-            if( ! keyword.empty() )
-            {
-                try {
-                    return sLocked( keyword, s );
-                } catch ( char const* error )
-                {
-                    dump( ( boost::format("\"LOCKING\" Action: %s") % error ).str() );
-                }
-            }
+           []( sLocked & s  ) -> State { return s; },
+           []( sOpened & s  ) -> State { return s.auditor( "\"CLOSE\" door before \"LOCKING\""); },
+           [=]( sClosed & s ) -> State {
+            // Todo : Model below as a guard
+            if( keyword.length() > 10 )
+                return sLocked( keyword, s );
             return s;
         }
         );
-        return *this;
     }
-    door_logics & eUnLock( const string & keyword )
+
+    void eUnLock( const string & keyword )
     {
         using namespace variant_talk;
         state_ = match( state_ ,
@@ -155,56 +188,53 @@ public:
         [](  sOpened & s ) -> State { return s; },
         [=]( sLocked & s ) -> State
         {
-            if( keyword != s.keyword() )
+            // Todo : Model below as a guard
+            if( keyword == s.keyword() )
             {
-                std::size_t h1 = std::hash<std::string>{}(keyword);
-                return dump( ( boost::format("\"UNLOCKING\" Action rejected: Key %x doesn't match") % h1 ).str() ).state();
+                s.onExit();
+                return sClosed();
             }
-            s.onExit();
-            return sClosed();
+            std::size_t h1 = std::hash<std::string>{}(keyword);
+            return dump( ( boost::format("\"UNLOCKING\" Action rejected: Key %x doesn't match") % h1 ).str() ).state();
         }
         );
-        return *this;
     }
+
+    friend iDoorLogics<cDoorLogics>;
 
 };
 
-#include <bits/stdc++.h>
-#include <functional>
-
-constexpr static char magics[] = "12345678910";
-static void fsm_testing( void )
-{
-    door_logics dl;
-    auto tryClose  = [&dl](){ dl.eClose(); };
-    auto tryOpen   = [&dl](){ dl.eOpen(); };
-    auto tryUnLock = [&dl]( const string & key = magics ){ dl.eUnLock(key); };
-    auto tryLock   = [&dl]( const string & key = magics ){ dl.eLock(key); };
-
-    tryClose();
-
-    // Open state testing
-    dl.dump("\n## Opening Test");
-    tryOpen();
-    tryLock("1233");
-    tryLock();
-    tryClose();
-    tryLock("22123");
-    tryLock();
-
-    // Locking state testing
-    dl.dump("\n## Locking Test");
-    tryOpen();
-    tryClose();
-    tryUnLock("123");
-    tryUnLock();
-    tryOpen();
-}
-
-
 int main()
 {
-    fsm_testing();
+    if( /* DISABLES CODE */ (0) ){  cDoorLogics().testing();  }
+
+    {
+        auto idl = std::make_unique<cDoorLogics>();
+        auto tryClose  = [&](){ idl->Close(); };
+        auto tryOpen   = [&](){ idl->Open(); };
+        auto tryUnLock = [&]( const string & key = magics ){ idl->UnLock(key); };
+        auto tryLock   = [&]( const string & key = magics ){ idl->Lock(key); };
+
+        idl->dump("\n## CRTP interface testing");
+
+        tryClose();
+        // Open state testing
+        idl->dump("\n## Opening Test");
+        tryOpen();
+        tryLock("1233");
+        tryLock();
+        tryClose();
+        tryLock("22123");
+        tryLock();
+
+        // Locking state testing
+        idl->dump("\n## Locking Test");
+        tryOpen();
+        tryClose();
+        tryUnLock("123");
+        tryUnLock();
+        tryOpen();
+    }
     return 0;
 }
 
