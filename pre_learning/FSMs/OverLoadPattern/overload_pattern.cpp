@@ -21,13 +21,9 @@ struct fsm_state : public crtp<fsm_state<T>>
     {
         ( cout << boost::format("state( %20s ) : proc : %10s\n") % dump() % backtrace ).flush();
     }
-    virtual void tick(){}
     virtual const string dump(){ return this->underly().dump(); }
     int trace_level;
 };
-
-
-
 
 struct sClosed : fsm_state<sClosed> {
 public:
@@ -38,7 +34,10 @@ public:
         if( onEntry() == true )
             ( cout << boost::format("state( %20s )\n") % dump() ).flush();
     }
-    void onExit( const string & backtrace = "" ){ fsm_state::onExit( __FUNCTION__ ); }
+    void onExit( const string & backtrace = "" )
+    {
+        fsm_state::onExit( __FUNCTION__ + backtrace );
+    }
     const string dump(){ return "Closed"; }
 };
 
@@ -55,7 +54,7 @@ struct sOpened : fsm_state<sOpened> {
     }
     void onExit( const string & backtrace = "" )
     {
-        fsm_state::onExit( __FUNCTION__ );
+        fsm_state::onExit( __FUNCTION__ + backtrace );
     }
     const string dump(){ return "Opened"; }
 };
@@ -74,31 +73,33 @@ struct sLocked : fsm_state<sLocked> {
         else
             throw "forbidden entry invalid keyword";
     }
-    virtual bool onEntry()
+    bool onEntry()
     {
         // Entry guard modelling
         return ( keyword_ .length() < 10 ) ? false : true;
     }
-    const string dump(){ return ( boost::format("Locked(%10s)") % keyword_ ).str(); }
+    void onExit ( const string & backtrace = "" )
+    {
+        fsm_state::onExit( __FUNCTION__ + backtrace );
+    }
+    const string dump(){ return ( boost::format("Locked( %x )") % std::hash<std::string>{}(keyword_)).str(); }
+    const string keyword(){ return keyword_ ; }
     string keyword_ ;
 };
 
 
-using State = variant <sOpened,sClosed,sLocked>;
-
-
-struct eUnLock {};
-
-struct lock_logics
+struct door_logics
 {
-    lock_logics & eLock( const string & keyword )
+    using State = variant <sOpened,sClosed,sLocked>;
+
+    door_logics & eLock( const string & keyword )
     {
         using namespace variant_talk;
         state_ = match( state_ ,
-        [=]( const sOpened & s ) -> State
+        [=]( const sOpened & ) -> State
         { return dump( "CLOSE door before Locking").state(); },
-
-        []( const sLocked & s ) -> State { return s; },
+        []( const sLocked & s ) -> State
+        { return s; },
         [=]( sClosed & s ) -> State
         {
             // Todo below is the typical transition guard
@@ -117,25 +118,50 @@ struct lock_logics
         return *this;
     }
 
-    lock_logics & eOpen( )
+    door_logics & eOpen( )
     {
         using namespace variant_talk;
         state_ = match( state_ ,
            []( sOpened & s ) -> State { return s; },
            []( sClosed & s ) -> State { return sOpened( s ); },
-           [=]( sLocked & ) ->
-                State { return dump( "UnLock door before Opening").state(); }
+           [=]( sLocked &  ) -> State
+        {
+            return dump( "UnLock door before OPENING").state();
+        }
         );
         return *this;
     }
 
-    lock_logics & eClose()
+    door_logics & eClose()
     {
         using namespace variant_talk;
         state_ = match( state_ ,
            []( sClosed & s ) -> State { return s; },
            []( sLocked & s ) -> State { return s; },
-           []( sOpened & s ) -> State { s.onExit(); return sClosed(); }
+           []( sOpened & s ) -> State
+        {
+            s.onExit(); return sClosed();
+        }
+        );
+        return *this;
+    }
+
+    door_logics & eUnLock( const string & keyword )
+    {
+        using namespace variant_talk;
+        state_ = match( state_ ,
+           []( sClosed & s ) -> State { return s; },
+           []( sOpened & s ) -> State { return s; },
+           [=]( sLocked & s ) -> State
+        {
+            if( keyword != s.keyword() )
+            {
+                std::size_t h1 = std::hash<std::string>{}(keyword);
+                return dump( ( boost::format("UNLOCKING action rejected: Key %x doesn't match") % h1 ).str() ).state();
+            }
+            s.onExit();
+            return sClosed();
+        }
         );
         return *this;
     }
@@ -143,7 +169,7 @@ struct lock_logics
     State state_ { sClosed() };
 
     template<typename R = sOpened, typename S = sClosed, typename T = sLocked>
-    lock_logics & dump( string backtrace = "" )
+    door_logics & dump( string backtrace = "" )
     {
         using namespace variant_talk;
         string s = match( state_ ,
@@ -158,22 +184,37 @@ struct lock_logics
     State state(){ return state_ ; }
 };
 
+#include <bits/stdc++.h>
+#include <functional>
+
+constexpr static char magics[] = "12345678910";
 static void fsm_testing( void )
 {
-    lock_logics ll;
-    auto tryGoodLock = [&ll](){ ll.eLock("12345678910"); };
-    auto tryBadLock  = [&ll](){ ll.eLock("123"); };
-    auto tryClose    = [&ll](){ ll.eClose(); };
-    auto tryOpen     = [&ll](){ ll.eOpen(); };
+
+
+    door_logics dl;
+    auto tryClose  = [&dl](){ dl.eClose(); };
+    auto tryOpen   = [&dl](){ dl.eOpen(); };
+    auto tryUnLock = [&dl]( const string & key = magics ){ dl.eUnLock(key); };
+    auto tryLock   = [&dl]( const string & key = magics ){ dl.eLock(key); };
 
     tryClose();
+
+    // Open state testing
+    dl.dump("\n## Opening Test");
     tryOpen();
-    tryBadLock();
-    tryGoodLock();
-
+    tryLock("1233");
+    tryLock();
     tryClose();
-    tryBadLock();
-    tryGoodLock();
+    tryLock("22123");
+    tryLock();
+
+    // Locking state testing
+    dl.dump("\n## Locking Test");
+    tryOpen();
+    tryClose();
+    tryUnLock("123");
+    tryUnLock();
     tryOpen();
 
 }
