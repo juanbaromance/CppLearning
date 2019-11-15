@@ -4,7 +4,6 @@
 #include <memory>
 #include <cmath>
 #include <typeinfo>
-#include <boost/format.hpp>
 
 template <typename T>
 struct crtp {
@@ -12,6 +11,9 @@ struct crtp {
     T const& underly() const { return static_cast<T const&>(*this); }
 };
 using namespace std;
+
+// Prints formatted error message.
+#include "fmt/include/fmt/format.h"
 
 template <typename T>
 struct fsm_state : public crtp<fsm_state<T>>
@@ -21,7 +23,7 @@ struct fsm_state : public crtp<fsm_state<T>>
     // Prototypes a scope-guard
     virtual bool onEntry(){ return true; }
     virtual void onExit( const string & backtrace = "" )
-    {  ( cout << boost::format("state( %20s ) : proc : %10s\n") % dump() % backtrace ).flush(); }
+    { fmt::print("state( {0:10s} ) -> proc {1:10s}\n", dump(), backtrace ); }
     virtual const string dump(){ return this->underly().dump(); }
     int trace_level;
 };
@@ -35,7 +37,7 @@ public:
         // Todo : Model a global/specific Lock which disables constructor see EC++ item XY,
         // Very likely throw something is the best approach
         if( onEntry() == true )
-            ( cout << boost::format("state( %20s )\n") % dump() ).flush();
+            fmt::print("state( {0:10s} )\n", dump());
     }
     void onExit( const string & backtrace = "" ){ fsm_state::onExit( __FUNCTION__ + backtrace );  }
     const string dump(){ return "Closed"; }
@@ -48,15 +50,10 @@ struct sOpened : fsm_state<sOpened> {
         if( onEntry() )
         {
             s.onExit();
-            ( cout << boost::format("state( %20s )\n") % dump() ).flush();
+            fmt::print("state( {0:10s} )\n", dump());
         }
     }
     void onExit( const string & backtrace = "" ){ fsm_state::onExit( __FUNCTION__ + backtrace ); }
-    sOpened & auditor( const string & backtrace )
-    {
-        cout << boost::format("%s\n") % backtrace;
-        return *this;
-    }
     const string dump(){ return "Opened"; }
 };
 
@@ -65,20 +62,14 @@ struct sLocked : fsm_state<sLocked> {
     {
         if( onEntry() )
         {
-            ( cout << boost::format("Locking Action: ")).flush();
+            fmt::print( "Locking Action: ");
             s.onExit();
-            ( cout << boost::format("state( %20s )\n") % dump() ).flush();
+            fmt::print( "Locking Action: {}", dump() );
         }
     }
 
     void onExit ( const string & backtrace = "" ){ fsm_state::onExit( __FUNCTION__ + backtrace ); }
-    sLocked & auditor( const string & backtrace )
-    {
-        cout << boost::format("%s\n") % backtrace;
-        return *this;
-    }
-
-    const string dump(){ return ( boost::format("Locked( %x )") % std::hash<std::string>{}(keyword_)).str(); }
+    const string dump(){ return fmt::format("Locked( {0:x} )", std::hash<std::string>{}(keyword_) ); }
     const string keyword(){ return keyword_ ; }
     string keyword_ ;
 };
@@ -111,7 +102,7 @@ public:
               []( S &s ) -> string { return s.dump(); },
               []( T &s ) -> string { return s.dump(); }
         );
-        ( cout << backtrace << " : " << report << "\n").flush();
+        fmt::print("{0} : {1}\n" , backtrace, report );
         return *this;
     }
 
@@ -144,14 +135,13 @@ public:
 
     // Intrusive Approach A : Events manage the state implementation
 private:
-    using newState = std::optional<State>;
 
     void eOpen( )
     {
         state_ = match( state_ ,
            []( sClosed & s ) -> State { return sOpened( s ); },
            []( sOpened & s ) -> State { return s; },
-           []( sLocked & s ) -> State { return s.auditor("\"UNLOCK\" door before OPENING"); }
+           []( sLocked & s ) -> State { fmt::print("\"UNLOCK\" door before OPENING"); return s; }
         );
     }
 
@@ -159,6 +149,7 @@ private:
     {
         state_ = match( state_ ,
         // Todo : extra sintactic sugar is required to assembly below ala OR
+        // ( sClosed | sLocked , s ) -> State { return s }
            []( sClosed & s ) -> State { return s; },
            []( sLocked & s ) -> State { return s; },
            []( sOpened & s ) -> State { s.onExit(); return sClosed(); }
@@ -167,10 +158,9 @@ private:
 
     void eLock( const string & keyword )
     {
-        using namespace variant_talk;
         state_ = match( state_ ,
            []( sLocked & s  ) -> State { return s; },
-           []( sOpened & s  ) -> State { return s.auditor( "\"CLOSE\" door before \"LOCKING\""); },
+           []( sOpened & s  ) -> State { fmt::print( "\"CLOSE\" door before \"LOCKING\"\n"); return s; },
            [=]( sClosed & s ) -> State {
             // Todo : Model below as a guard
             if( keyword.length() > 10 )
@@ -182,7 +172,6 @@ private:
 
     void eUnLock( const string & keyword )
     {
-        using namespace variant_talk;
         state_ = match( state_ ,
         [](  sClosed & s ) -> State { return s; },
         [](  sOpened & s ) -> State { return s; },
@@ -194,8 +183,8 @@ private:
                 s.onExit();
                 return sClosed();
             }
-            std::size_t h1 = std::hash<std::string>{}(keyword);
-            return dump( ( boost::format("\"UNLOCKING\" Action rejected: Key %x doesn't match") % h1 ).str() ).state();
+            fmt::print("\"UNLOCKING\" Action rejected: Key {0:x} doesn't match\n", std::hash<std::string>{}(keyword) );
+            return s;
         }
         );
     }
