@@ -1,35 +1,50 @@
-#include "cStateObserver.h"
 #include <variant>
 
-constexpr float _weights[]= { 0.05, 0.10, 0.7, 0.10, 0.05 };
+#include "cStateObserver.h"
 
+/*
+ * @cT cT is related with the concrete class
+ * @iT iT is related with the interface class // deprecated through crtp
+ * @...Args are the cT constructor arguments
+*/
+template<class cT, class... Args>
+auto factory( Args... args ){ return [ args... ] { return std::make_shared<cT>(args...); }(); }
 
-cStateObserver::cStateObserver(string name, float Q, float R, int window ) : _name( name )
+cStateObserver::cStateObserver(std::string name, float Q, float R, std::vector<float> v ) : _name( name )
 {
-    filters[ reduce(Numerology::MA_MEDIAN_F)       ] = ( make_shared<iFilter>( MedianFilter      ( _name + ".Median", window, vector <float>( _weights, _weights + 2 ))));
-    filters[ reduce(Numerology::KALMAN_DISCRETE_F) ] = ( make_shared<iFilter>( ScalarKalman      ( _name + ".SteadyKalman", Q, R ) ));
-    filters[ reduce(Numerology::ALPHA_BETA_F)      ] = ( make_shared<iFilter>( AlphaBetaObserver ( _name + ".AlphaBeta", Q, R )));
+    std::shared_ptr<AlphaBetaObserver> w;
+    filters = std::make_tuple(
+        factory<MedianFilter>( _name + ".Median", v.size(), v ),
+        factory<ScalarKalman>( _name + ".SteadyKalman", Q, R ),
+        w = factory<AlphaBetaObserver>( _name + ".AlphaBeta"),
+        factory<ExponentialSmoother>( _name + ".Exponential"));
+    w->settings( 0.1, 0.3, 0.1 );
 }
 
 void cStateObserver::settings(float, float, float){}
 
 float cStateObserver::state( Numerology index )
 {
+    std::array<float,NumOfObservers> v = {
+        std::get<0>(filters)->state(),
+        std::get<1>(filters)->state(),
+        std::get<2>(filters)->state(),
+        std::get<3>(filters)->state()
+    };
     try {
-        return filters.at( reduce( index ) )->state();
+        return v.at( reduce(index) );
     } catch (...) {
         return -100000;
     }
 }
 
 #include <algorithm>
-cStateObserver::ObserverState cStateObserver::sync(float xm, float )
+cStateObserver::ObserverState cStateObserver::sync( float xm, float )
 {
     ObserverState tmp;
-    std::transform ( filters.begin(), filters.end(), tmp.begin(),
-                   [=]( shared_ptr<iFilter> & f) -> float { return f->step( xm ); });
-
+    std::apply( [ & tmp, xm ]( MedianView m, ScalarKalmanView skv, AlphaBetaView abv, ExponentialView ev )
+               { tmp = { m->step(xm), skv->step(xm), abv->step(xm), ev->step(xm) }; }, filters );
     return tmp;
 }
 
-string cStateObserver::report(){ return string(); }
+std::string cStateObserver::report(){ return std::string(); }

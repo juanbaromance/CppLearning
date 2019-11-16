@@ -3,22 +3,22 @@
 #include <string>
 #include <array>
 #include <memory>
-
+#include <tuple>
 #include "Observers.h"
-using namespace std;
 
 class cStateObserver {
 public:
     enum class Numerology {
+        MA_MEDIAN_F,
         KALMAN_DISCRETE_F,
         ALPHA_BETA_F,
-        MA_MEDIAN_F,
+        EXPONENTIAL_F,
         Dummy
     };
     static constexpr int NumOfObservers = static_cast<int>(Numerology::Dummy);
 
 public:
-    cStateObserver( string name = "unknown", float Q = 0.005, float R = 0.1, int window = 5 );
+    cStateObserver( std::string name = "unknown", float Q = 0.001, float R = 0.1, std::vector<float> v = { 0.05, 0.10, 0.7, 0.10, 0.05 } );
     void  settings( float Q, float R, float sampling = 0.1 );
     float state( enum Numerology index );
 
@@ -28,8 +28,12 @@ public:
 
 private:
     constexpr size_t reduce( Numerology index ){ return static_cast<size_t>( index ); }
-    std::array< shared_ptr<iFilter>, NumOfObservers> filters;
+    // std::array< std::shared_ptr<iFilter>, NumOfObservers> filters;
     std::string _name;
-    int _window;
+    using MedianView       = std::shared_ptr<iFilter<MedianFilter>>;
+    using ScalarKalmanView = std::shared_ptr<iFilter<ScalarKalman>>;
+    using AlphaBetaView    = std::shared_ptr<iFilter<AlphaBetaObserver>>;
+    using ExponentialView  = std::shared_ptr<iFilter<ExponentialSmoother>>;
+    std::tuple<MedianView,ScalarKalmanView,AlphaBetaView,ExponentialView> filters;
 };
 

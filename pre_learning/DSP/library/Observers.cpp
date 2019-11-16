@@ -1,6 +1,5 @@
 #include "Observers.h"
 
-
 ExponentialSmoother::ExponentialSmoother( std::string name_, int N ) : name( name_ ), alpha_decay( 1./N ), yk_1( 0 ) {  }
 int ExponentialSmoother::plateau(){ return ( static_cast<int>( round((1 / alpha_decay)))); }
 float ExponentialSmoother::update(float xk, float aux)
@@ -10,41 +9,40 @@ float ExponentialSmoother::update(float xk, float aux)
 }
 
 MedianFilter::MedianFilter(std::string name, int window, const std::vector<float> &weights)
-    : index_( 0 ), _xk( 0 ), _name( name ),
-      _window( std::vector<float>( window, _xk ) ), _buffer( window ), _weights( weights )
+    : index_( 0 ), xk_( 0 ), name_( name ),
+      window_( std::vector<float>( window, xk_ ) ), buffer_( window ), weights_( weights )
 {
-    j = _window.begin() + _window.size()/2 - ( ( _weights.size() -1 )/2 );
+    j = window_.begin() + window_.size()/2 - ( ( weights_.size() -1 )/2 );
 }
 void MedianFilter::testing(){}
-int MedianFilter::reset(float init_val, bool)
+int  MedianFilter::reset(float init_val, bool)
 {
-    _xk = init_val;
+    xk_ = init_val;
     return 0;
 }
-float MedianFilter::state(){ return _xk ; }
 
 #include <algorithm>
 float MedianFilter::step(float xm)
 {
-    _buffer[ index_++ ] = xm;
-    index_ %= _window.size();
+    buffer_[ index_++ ] = xm;
+    index_ %= window_.size();
 
-    _window = _buffer;
-    std::sort( _window.begin(), _window.end() );
-    _xk = 0;
+    window_ = buffer_;
+    std::sort( window_.begin(), window_.end() );
+    xk_ = 0;
 
     std::vector <float>::iterator i = j;
-    std::vector <float>::iterator w = _weights.begin() ;
-    for( w = _weights.begin(); w != _weights.end(); w++ )
+    std::vector <float>::iterator w = weights_.begin() ;
+    for( w = weights_.begin(); w != weights_.end(); w++ )
     {
-        _xk = _xk + ( w[0] * i[0] );
+        xk_ = xk_ + ( w[0] * i[0] );
         i++ ;
     }
-    return _xk;
+    return xk_;
 }
 
-AlphaBetaObserver::AlphaBetaObserver(std::string name, float alpha, float beta) :
-    _name( name ), _alpha( alpha ), _beta( beta )
+AlphaBetaObserver::AlphaBetaObserver(std::string name, float alpha, float beta)
+    : name_( name ), alpha_( alpha ), beta_( beta )
 { reset( 0, true); }
 void AlphaBetaObserver::settings(float Q, float R, float sampling)
 {
@@ -57,72 +55,69 @@ void AlphaBetaObserver::settings(float Q, float R, float sampling)
 std::string AlphaBetaObserver::report()
 {
     std::ostringstream oss;
-    oss << _name << " :: parameters \u03b1(" << _alpha << ")," << "\u03b2(" << _beta << ")";
+    oss << name_ << " :: parameters \u03b1(" << alpha_ << ")," << "\u03b2(" << beta_ << ")";
     return oss.str();
 }
-float AlphaBetaObserver::step(float xm, float elapsed)
+float AlphaBetaObserver::step(float xm, float elapsed )
 {
     /* The estimations for x and v */
-    float xk_e = _xk_1 + ( _vk_1 * elapsed );
-    float vk_e = _vk_1;
+    float xk_e = xk_1 + ( vk_1 * elapsed );
+    float vk_e = vk_1;
 
     /* The x error */
     float rk = xm - xk_e;
 
     /* Now the error additive/learning part to the estimation */
-    _xk  = xk_e + ( _alpha * rk );
-    _vk  = vk_e + ( ( _beta * rk ) / elapsed );
+    xk  = xk_e + ( alpha_ * rk );
+    vk  = vk_e + ( ( beta_ * rk ) / elapsed );
 
     /* History the current output */
-    _xk_1 = _xk;
-    _vk_1 = _vk;
-    _state = state_t( _xk, _vk );
-    return( _xk );
+    xk_1 = xk;
+    vk_1 = vk;
+    state_ = state_t( xk, vk );
+    return xk;
 }
 void  AlphaBetaObserver::settings(float alpha, float beta)
 {
-    _alpha = alpha;
-    _beta  = beta;
+    alpha_ = alpha;
+    beta_  = beta;
 }
 int   AlphaBetaObserver::reset(float measure, bool)
 {
-    _xk_1 = _xk = measure;
-    _vk_1 = _vk = 0;
+    xk_1 = xk = measure;
+    vk_1 = vk = 0;
     return 0;
 }
 void  AlphaBetaObserver::testing(){}
-float AlphaBetaObserver::state() { return _xk_1; }
-float AlphaBetaObserver::step(float xm){ return step( xm, 0.1 ); }
+float AlphaBetaObserver::state() { return xk_1; }
+float AlphaBetaObserver::step( float xm ){ return step( xm, 0.010 ); }
 
-ScalarKalman::ScalarKalman(std::string name, float Q, float R)
-    : _name( name ), _Q( Q ), _R( R ), _A(1.0), _H(1.0) { reset(0,true); }
-void  ScalarKalman::settings(float Q, float R)
+ScalarKalman::ScalarKalman(std::string name, float Q_, float R_)
+    : _name( name ), Q( Q_ ), R( R_ ), A(1.0), H(1.0) { reset(0,true); }
+void  ScalarKalman::settings(float Q_, float R_)
 {
-    _Q = Q;
-    _R = R;
+    Q = Q_;
+    R = R_;
 }
-float ScalarKalman::step(float xm)
+float ScalarKalman::step( float xm )
 {
     /* Prediction */
-    float xk_e = _A * _xk_1;
-    float Pk_e = _A * _Pk_1 + _Q;
+    float xk_e = A * xk_1;
+    float Pk_e = A * Pk_1 + Q;
 
     /* Update the Kalman Gain */
-    _K = Pk_e / ( Pk_e + _R );
+    K = Pk_e / ( Pk_e + R );
 
     /* Update estimators and store new historic */
-    _xk_1 = ( xk_e += ( _K * ( ( xm * _H ) - xk_e ) ) );
-    _Pk_1  = Pk_e * ( 1 - _K );
-    return _xk_1;
+    xk_1 = ( xk_e += ( K * ( ( xm * H ) - xk_e ) ) );
+    Pk_1  = Pk_e * ( 1 - K );
+    return xk_1;
 }
 void  ScalarKalman::testing(){}
-int   ScalarKalman::reset(float initial_val, bool)
+int   ScalarKalman::reset( float initial_val, bool )
 {
-    _xk_1 = initial_val;
-    _Pk_1 = 0.2;
-    return(0);
+    xk_1 = initial_val;
+    Pk_1 = 0.2;
+    return 0;
 }
-float ScalarKalman::state()
-{
-    return( _xk_1 );
-}
+float ScalarKalman::state(){ return xk_1; }

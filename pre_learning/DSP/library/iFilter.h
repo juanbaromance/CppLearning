@@ -23,20 +23,31 @@ public:
     virtual ~iAcquisitionContext(){}
 };
 
+template <typename T>
+struct crtp {
+    T& underly(){ return static_cast<T&>(*this); }
+    T const& underly() const { return static_cast<T const&>(*this); }
+};
 
-class iFilter
+
+template <typename T>
+class iFilter : public crtp<T>
 {
 public:
     using measureT = float;
     using msecT = int;
-
-    virtual measureT step    ( measureT ) { return -1; };
-    virtual int      reset   ( measureT = 0, bool deep_reset = false ) { return deep_reset; };
-    virtual void     testing ( ) { };
-    virtual measureT state   ( ) { return -1; };
-    virtual void     setSampling ( msecT ){ };
-
+    virtual float  step( float m );
+    virtual int    reset   ( measureT = 0, bool deep_reset = false );
+    virtual void   testing ( );
+    virtual float  state   ( );
+    virtual void   setSampling ( msecT );
     virtual ~iFilter(){}
 };
+
+template <typename T> float iFilter<T>::step( float m ){ return this->underly().step( m ); }
+template <typename T> int   iFilter<T>::reset( measureT m, bool deep_reset ){ return this->underly().reset(m,deep_reset);}
+template <typename T> void  iFilter<T>::testing ( ){ this->underly().testing(); }
+template <typename T> float iFilter<T>::state( ){ return this->underly().state(); }
+template <typename T> void  iFilter<T>::setSampling ( msecT msec){ this->underly().setSampling( msec );}
 
 #endif

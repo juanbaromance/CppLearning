@@ -6,7 +6,7 @@
 
 #include "iFilter.h"
 
-class cBiQuad : public iFilter
+class cBiQuad : public iFilter<cBiQuad>
 {
     enum class Numerology {
         LowPass,
@@ -20,15 +20,14 @@ public:
     void  tune( size_t Fs, size_t Fc, double Q ){ ZeroPoleMap( Fs, Fc, Q, topology ); }
     virtual ~cBiQuad();
 
-public:
-    int reset( float input = 0, bool hardcore = false );
-    float step ( float measure );
-    float state(){ return o; }
 
     // iFilter interface implementation
-private:
-    void  testing(){ return; }
-    void  setSampling( int Fs ){ return (void)Fs; }
+public:
+    int reset( float input = 0, bool hardcore = false ) override;
+    float step ( float measure ) override;
+    float state() override { return o; }
+    void  testing() override { return; }
+    void  setSampling( int Fs ) override { return (void)Fs; }
     std::string name(){ return _name; }
 
 private:
