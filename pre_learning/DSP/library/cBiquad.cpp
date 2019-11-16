@@ -1,21 +1,19 @@
-#include "gpio_modules/cBiquad.h"
+#include "cBiquad.h"
+
 #include <sstream>
 #include <cmath>
 #include <iostream>
 using namespace std;
 
-cBiQuad::cBiQuad( string name, const vector<float> &poles, const vector<float> &zeros, int order )
-    : _name( name )
+cBiQuad::cBiQuad( const string & name, const vector<float> & poles_, const vector<float> & zeros_, int )
+    : _name( name ), poles( poles_ ), zeros( zeros_ )
 {
-    (void)order;
-    this->poles = poles;
-    this->zeros = zeros;
     z.resize( poles.size() );
     reset(0);
 }
 
-cBiQuad::cBiQuad( string name, size_t Fs, size_t Fc, double Q, cBiQuad::Numerology _topology )
-    : _name( name ), topology( _topology )
+cBiQuad::cBiQuad(const string &name, size_t Fs, size_t Fc, double Q, const Numerology &_topology )
+    : _name( name ), topology( _topology ), poles( )
 {
     poles.resize(3);
     zeros.resize( poles.size() );
@@ -23,13 +21,13 @@ cBiQuad::cBiQuad( string name, size_t Fs, size_t Fc, double Q, cBiQuad::Numerolo
     ZeroPoleMap( Fs, Fc, Q, topology );
 }
 
-cBiQuad::~cBiQuad(){ std::cout << __PRETTY_FUNCTION__ << "." << _name << endl; }
-int cBiQuad::reset( float input, bool hardcore )
+cBiQuad::~cBiQuad(){ cout << __PRETTY_FUNCTION__ << "." << _name << endl; }
+int cBiQuad::reset(float input, bool hardcore )
 {
     (void)hardcore;
     for( size_t i = 0; i < z.size() -1; i++ )
         z[i] = input;
-    std::cout << __PRETTY_FUNCTION__ << "." << _name << endl;
+    cout << __PRETTY_FUNCTION__ << "." << _name << endl;
     return 0;
 }
 
@@ -45,11 +43,11 @@ float cBiQuad::step( float input )
 
 string cBiQuad::report()
 {
-    std::ostringstream oss;
-    oss << std::endl << "\tZeros( ";
+    ostringstream oss;
+    oss << endl << "\tZeros( ";
     for( size_t i = 0; i < z.size(); i++ )
         oss << "a" << i << " " << zeros[ i ] << " ";
-    oss << ")" << std::endl;
+    oss << ")" << endl;
 
     oss << "\tPoles( ";
     for( size_t i = 0; i < z.size(); i++ )
@@ -66,7 +64,7 @@ void cBiQuad::ZeroPoleMap(size_t Fs, size_t Fc, double Q, cBiQuad::Numerology ty
 
     switch (type) {
 
-    case LowPass:
+    case Numerology::LowPass:
         norm = 1 / (1 + K / Q + K * K);
         a0 = K * K * norm;
         a1 = 2 * a0;
@@ -75,7 +73,7 @@ void cBiQuad::ZeroPoleMap(size_t Fs, size_t Fc, double Q, cBiQuad::Numerology ty
         b2 = (1 - K / Q + K * K) * norm;
         break;
 
-    case Notch:
+    case Numerology::Notch:
         norm = 1 / (1 + K / Q + K * K);
         a0 = (1 + K * K) * norm;
         a1 = 2 * (K * K - 1) * norm;

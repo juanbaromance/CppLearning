@@ -27,16 +27,16 @@ public:
 class iFilter
 {
 public:
+    using measureT = float;
+    using msecT = int;
 
-    virtual float step    ( float measure ) = 0;
-    virtual int   reset   ( float input = 0, bool deep_reset = false ) = 0;
-    virtual void  testing ( ) = 0;
-    virtual float state   ( ) = 0;
-    virtual void  setSampling ( int msec ) = 0;
+    virtual measureT step    ( measureT ) { return -1; };
+    virtual int      reset   ( measureT = 0, bool deep_reset = false ) { return deep_reset; };
+    virtual void     testing ( ) { };
+    virtual measureT state   ( ) { return -1; };
+    virtual void     setSampling ( msecT ){ };
 
-    // c++ boiler plate
     virtual ~iFilter(){}
 };
-
 
 #endif

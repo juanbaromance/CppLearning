@@ -4,36 +4,35 @@
 #include <vector>
 #include <string>
 
-#include "gpio_modules/public/iFilter.h"
+#include "iFilter.h"
 
 class cBiQuad : public iFilter
 {
-    enum Numerology {
+    enum class Numerology {
         LowPass,
         Notch,
     };
 
 public:
-    cBiQuad( std::string _name, const std::vector<float>& poles, const std::vector<float>& zeros, int order );
-    cBiQuad (std::string _name, size_t Fs, size_t Fc, double Q = 0.7071, enum Numerology _topology = LowPass );
+    cBiQuad(const std::string & _name, const std::vector<float>& poles_, const std::vector<float>& zeros_, int order );
+    cBiQuad (const std::string & _name, size_t Fs, size_t Fc, double Q = 0.7071, const Numerology & _topology = Numerology::LowPass );
     std::string report();
     void  tune( size_t Fs, size_t Fc, double Q ){ ZeroPoleMap( Fs, Fc, Q, topology ); }
     virtual ~cBiQuad();
 
 public:
-    // iFilter (direct) exposition
     int reset( float input = 0, bool hardcore = false );
     float step ( float measure );
-    inline float state(){ return o; }    
+    float state(){ return o; }
 
     // iFilter interface implementation
 private:
-    inline void  testing(){ return; }
-    inline void  setSampling( int Fs ){ return (void)Fs; }
+    void  testing(){ return; }
+    void  setSampling( int Fs ){ return (void)Fs; }
     std::string name(){ return _name; }
 
 private:
-    void ZeroPoleMap(size_t Fs, size_t Fc, double Q = 0.7071, enum Numerology type = LowPass );
+    void ZeroPoleMap(size_t Fs, size_t Fc, double Q = 0.7071, enum Numerology type = Numerology::LowPass );
     std::string _name;
     std::vector <float> z;
     std::vector <float> poles, zeros;
