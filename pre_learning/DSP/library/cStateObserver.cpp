@@ -12,13 +12,17 @@ auto factory( Args... args ){ return [ args... ] { return std::make_shared<cT>(a
 
 cStateObserver::cStateObserver(std::string name, float Q, float R, std::vector<float> v ) : _name( name )
 {
-    std::shared_ptr<AlphaBetaObserver> w;
+    std::shared_ptr<AlphaBetaObserver> w = factory<AlphaBetaObserver>( _name + ".AlphaBeta");
+    w->settings( 0.1, 0.3, 0.1 );
+    std::shared_ptr<ScalarKalman> sk = factory<ScalarKalman>( _name + ".SteadyKalman", Q, R );
+
     filters = std::make_tuple(
         factory<MedianFilter>( _name + ".Median", v.size(), v ),
-        factory<ScalarKalman>( _name + ".SteadyKalman", Q, R ),
-        w = factory<AlphaBetaObserver>( _name + ".AlphaBeta"),
+        sk,
+        w,
         factory<ExponentialSmoother>( _name + ".Exponential"));
-    w->settings( 0.1, 0.3, 0.1 );
+
+    sk->iFilter<ScalarKalman>::testing();
 }
 
 void cStateObserver::settings(float, float, float){}

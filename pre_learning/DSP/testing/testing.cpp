@@ -35,7 +35,7 @@ int main()
     for( auto s : y )
     {
         auto f = so->sync( s );
-        cout << s << " ";copy( f.begin(), f.end(), ostream_iterator<float>( cout," ") ); cout << "\n";
+        cout << s << " "; copy( f.begin(), f.end(), ostream_iterator<float>( cout," ") ); cout << "\n";
     }
     return 0;
 

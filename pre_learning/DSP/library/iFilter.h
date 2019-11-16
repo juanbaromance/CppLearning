@@ -36,10 +36,10 @@ class iFilter : public crtp<T>
 public:
     using measureT = float;
     using msecT = int;
-    virtual float  step( float m );
-    virtual int    reset   ( measureT = 0, bool deep_reset = false );
-    virtual void   testing ( );
-    virtual float  state   ( );
+    virtual float  step( float m ) = 0;
+    virtual int    reset   ( measureT = 0, bool deep_reset = false ) = 0;
+    virtual void   testing ( ) = 0;
+    virtual float  state   ( ) = 0;
     virtual void   setSampling ( msecT );
     virtual ~iFilter(){}
 };

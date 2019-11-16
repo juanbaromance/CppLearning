@@ -35,5 +35,6 @@ private:
     using AlphaBetaView    = std::shared_ptr<iFilter<AlphaBetaObserver>>;
     using ExponentialView  = std::shared_ptr<iFilter<ExponentialSmoother>>;
     std::tuple<MedianView,ScalarKalmanView,AlphaBetaView,ExponentialView> filters;
+
 };
 
