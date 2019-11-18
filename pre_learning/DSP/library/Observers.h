@@ -8,7 +8,7 @@
 class ExponentialSmoother: public iFilter<ExponentialSmoother>
 {
 public:
-    ExponentialSmoother( std::string name_, int N = 15 );
+    ExponentialSmoother( std::string name_, int N = 15 ) : name( name_ ), alpha_decay( 1./N ), yk_1( 0 ) {  }
 
     // iFilter implementation
 private:
@@ -19,8 +19,12 @@ private:
     void  testing(){}
 
 private:
-    int plateau();
-    float update( float xk, float aux = 100000 );
+    int plateau(){ return ( static_cast<int>( round((1 / alpha_decay)))); }
+    float update( float xk, float aux = 100000 )
+    {
+        yk_1 = ( aux == 100000) ? yk_1 : aux;
+        return yk_1 += alpha_decay * (xk - yk_1) ;
+    }
     std::string name;
     float alpha_decay, yk_1;
 };

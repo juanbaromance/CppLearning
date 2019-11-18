@@ -18,7 +18,10 @@ public:
     static constexpr int NumOfObservers = static_cast<int>(Numerology::Dummy);
 
 public:
-    cStateObserver( std::string name = "unknown", float Q = 0.001, float R = 0.1, std::vector<float> v = { 0.05, 0.10, 0.7, 0.10, 0.05 } );
+    cStateObserver( std::string name = "unknown",
+		    float Q = 0.001, float R = 0.1,
+		    std::vector<float> v = { 0.05, 0.10, 0.7, 0.10, 0.05 } );
+
     void  settings( float Q, float R, float sampling = 0.1 );
     float state( enum Numerology index );
 

@@ -1,12 +1,8 @@
 #include "Observers.h"
 
-ExponentialSmoother::ExponentialSmoother( std::string name_, int N ) : name( name_ ), alpha_decay( 1./N ), yk_1( 0 ) {  }
-int ExponentialSmoother::plateau(){ return ( static_cast<int>( round((1 / alpha_decay)))); }
-float ExponentialSmoother::update(float xk, float aux)
-{
-    yk_1 = ( aux == 100000) ? yk_1 : aux;
-    return yk_1 += alpha_decay * (xk - yk_1) ;
-}
+
+
+
 
 MedianFilter::MedianFilter(std::string name, int window, const std::vector<float> &weights)
     : index_( 0 ), xk_( 0 ), name_( name ),
