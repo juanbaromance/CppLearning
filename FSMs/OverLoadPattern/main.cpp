@@ -13,7 +13,7 @@ struct crtp {
 using namespace std;
 
 // Prints formatted error message.
-#include "fmt/include/fmt/format.h"
+#include <fmt/format.h>
 
 template <typename T>
 struct fsm_state : public crtp<fsm_state<T>>

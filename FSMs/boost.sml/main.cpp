@@ -44,11 +44,22 @@ public:
     }
 };
 
-struct sClosed {
-    sClosed( shared_ptr<cHelper> helper_ ) : helper( helper_ ){}
-    void onEntry(){}
-    void onExit(){}
+struct sState {
+    sState( shared_ptr<cHelper> helper_ , const std::string & name_ = "unknown" )
+        : helper( helper_ ), name( name_ ){}
+    void onEntry( const std::string & backtrace = "" ){ helper->dump( name + "(Entry)" + backtrace ); }
+    void onExit ( const std::string & backtrace = "" ){ helper->dump( name + "(Exit)"  + backtrace ); }
     shared_ptr<cHelper> helper;
+    std::string name;
+
+};
+
+struct sClosed : public sState {
+    sClosed( shared_ptr<cHelper> helper_ )
+        : sState( helper_ , "Closed" )
+    {}
+    void onEntry(){ sState::onEntry(); }
+    void onExit() { sState::onExit(); }
 };
 
 struct sOpened {
@@ -90,32 +101,31 @@ struct cDoorLogics {
     auto operator()() noexcept {
         using namespace sml;
         return make_transition_table(
+            // StartUp
+            *"idle"_s / [&]{ startUp("StartUp sampled"); } = "sClosed"_s
 
-        // StartUp
-        *"idle"_s / [&]{ startUp("StartUp sampled"); } = "sClosed"_s
+            // Close specification
+            , "sClosed"_s + sml::on_entry<_> / [&] { closed->onEntry(); }
+            , "sClosed"_s + sml::on_exit<_>  / [&] { closed->onExit();  }
+            , "sClosed"_s + event<eOpen>     / [&] { dl->dump("Open Transition"); }  = "sOpened"_s
 
-        // Close specification
-        , "sClosed"_s + sml::on_entry<_> / [&] { closeEntry(); }
-        , "sClosed"_s + sml::on_exit<_>  / [&] { closeExit();  }
-        , "sClosed"_s + event<eOpen>     / [&] { dl->dump("Open Transition"); }  = "sOpened"_s
+            , "sOpened"_s + event<eClose>    / [&] { dl->dump("Close Transition");}  = "sClosed"_s
 
-        , "sLocked"_s + event<eOpen>     / ( [&] { dl->dump("\"UNLOCK\" door before OPENING"); } ) = "sLocked"_s
-        , "sOpened"_s + event<eClose>    / ( [] { }  )= "sClose"_s
+            , "sLocked"_s + event<eOpen>     / ( [&] { dl->dump("\"UNLOCK\" door before OPENING"); } ) = "sLocked"_s
 
-//         , "sOpened"_s + event<eLock>  / ( [&] {dl->dump("\"CLOSE\" door before \"LOCKING\"\n"); } ) = "sOpenened"_s
-//         , "sClosed"_s + event<eLock>   [ LockGuard ] / ([]{}) = "sLocked"_s
-//         , "sLocked"_s + event<eUnLock> [ UnLockGuard ] / ([]{}) = "sClose"_s
-                //         , "s3"_s + event<e4> / [] (const auto& e) { assert(42 == e.value); } = X
-                );
+            //         , "sOpened"_s + event<eLock>  / ( [&] {dl->dump("\"CLOSE\" door before \"LOCKING\"\n"); } ) = "sOpenened"_s
+            //         , "sClosed"_s + event<eLock>   [ LockGuard ] / ([]{}) = "sLocked"_s
+            //         , "sLocked"_s + event<eUnLock> [ UnLockGuard ] / ([]{}) = "sClose"_s
+            //         , "s3"_s + event<e4> / [] (const auto& e) { assert(42 == e.value); } = X
+            );
     }
 
     void startUp( std::string && backtrace )
     {
         dl->dump( backtrace );
-        closed = make_shared<sClosed>();
+        closed = make_shared<sClosed>(dl);
     }
-    void closeEntry(){ dl->dump( "Closed(Entry)"); }
-    void closeExit(){ dl->dump("Closed(Exit)"); }
+
 
     shared_ptr<cHelper> dl;
     std::string _name;
@@ -125,4 +135,7 @@ struct cDoorLogics {
 int main()
 {
     sml::sm<cDoorLogics> sm_impl{ make_shared<cHelper>(), "MyLogics" };
+    sm_impl.process_event(eOpen{});
+    sm_impl.process_event(eClose{});
+
 }
