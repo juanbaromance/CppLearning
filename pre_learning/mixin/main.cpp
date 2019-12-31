@@ -17,8 +17,24 @@ private:
 	std::string secondName_;
 };
 
+
+
+template <typename T>
+struct RepeatPrint : T {
+public:
+	explicit RepeatPrint(T const &t) : T(t) {}
+	void repeat(unsigned int n )
+	{
+		while( n-- >  0 )
+        this->dump();
+	}
+};
+
+
 int main()
 {
-	Name n("Pepito", "Perez");
-	n.dump();
+	Name pp("Pepito", "Perez");
+	pp.dump();
+
+	RepeatPrint<Name>(pp).repeat(3);
 }
