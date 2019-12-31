@@ -10,7 +10,7 @@
 template<class cT, class... Args>
 auto factory( Args... args ){ return [ args... ] { return std::make_shared<cT>(args...); }(); }
 
-cStateObserver::cStateObserver(std::string name, float Q, float R, std::vector<float> v ) : _name( name )
+cStateObserver::cStateObserver(const std::__cxx11::string &name, float Q, float R, const std::vector<float> &v ) : _name( name )
 {
     std::shared_ptr<AlphaBetaObserver> w = factory<AlphaBetaObserver>( _name + ".AlphaBeta");
     w->settings( 0.1, 0.3, 0.1 );
