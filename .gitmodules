@@ -1,0 +1,3 @@
+[submodule "ScottMeyers"]
+	path = ScottMeyers
+	url = https://github.com/juanbaromance/ScottMeyers.git
