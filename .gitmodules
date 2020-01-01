@@ -1,3 +1,6 @@
 [submodule "ScottMeyers"]
 	path = ScottMeyers
 	url = https://github.com/juanbaromance/ScottMeyers.git
+[submodule "HODesignPatternsWithCpp"]
+	path = HODesignPatternsWithCpp
+	url = https://github.com/juanbaromance/HODesignPatternsWithCpp.git
